@@ -1,34 +1,5 @@
 #!/bin/bash
 #
-# R730 proportional fan controller (GPU-aware) - v6
-# --------------------------------------------
-# SINGLE WRITER: only this script (on the always-alive Proxmox host) touches the fans.
-# No controller runs inside the VM - the VM is only a sensor (answered via qm guest exec).
-#
-# Sensors:
-#   - CPU:  hottest of the two generic "Temp" SDR sensors (over IPMI)
-#   - GPU:  hottest of the two passed-through GPUs (TITAN/V100 + P4) via
-#           `qm guest exec 102 -- nvidia-smi ...` on the host
-#
-# Per-source bands (each source ramps the fans by its OWN safe range; the
-# higher of the two resulting targets wins):
-#   - CPU:  T_LOW=55  -> FAN_MIN ; T_HIGH=80 -> FAN_MAX
-#   - GPU:  GPU_T_LOW=75 -> FAN_MIN ; GPU_T_HIGH=88 -> FAN_MAX
-#
-# Behaviour:
-#   - Below a source's T_LOW: that source asks for min speed
-#   - Between T_LOW and T_HIGH: speed rises linearly with temperature
-#   - At/above a source's T_HIGH: max speed + hand control to the BMC (auto) safety net
-#   - Once in AUTO, stay there until ALL sources are below their T_LOW for
-#     COOL_RUNS consecutive cycles, then resume manual control at min speed
-#   - RAMP LIMITER (MAX_STEP) caps per-cycle change -> gradual, not abrupt
-#   - Hysteresis (HYS_DOWN) eases DOWN a little slower than up (no chatter)
-#   - FAIL-SAFE: if a temp source can't be read, it is EXCLUDED - the controller runs
-#     on whatever sources it CAN read. If NO source can be read, it holds last speed.
-#   - Exhaust temp is warning-only. No IPMI key.
-#
-# Run from cron/timer every ~30-60s.
-#
 # ---------- IPMI (no key) ----------
 IPMIHOST=<BMC_IP_ADDRESS>        
 IPMIUSER=<IPMI_USERNAME>         
@@ -84,14 +55,6 @@ read_ipmi_temp() {
 }
 read_cpu_temp()     { read_ipmi_temp "Temp" max; }
 read_exhaust_temp() { read_ipmi_temp "Exhaust Temp" last; }
-#
-# ---------- Hottest GPU (via qm guest exec into VM 102) ----------
-# qm guest exec returns JSON (pretty or compact):
-#   {"exitcode":0,"exited":1,"out-data":"65\n71\n"}
-#
-# v6: single awk pass to extract out-data and find max temperature.
-# No multi-step sed/tr/grep pipeline. Immune to field order and line endings.
-#
 read_gpu_temp() {
     local raw payload temps
     raw=$(timeout "$GPU_QUERY_TIMEOUT" \
