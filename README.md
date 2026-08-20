@@ -1,3 +1,4 @@
+![alt text](https://github.com/MuhClaren/setspeed/blob/main/Screenshot%20from%202026-08-20%2009-14-10.png?raw=true)
 # Setspeed
 ## Fan‑Control Script (DELL R710, R720, R730, R730XD ‑ Proxmox) – Functional Summary
 
